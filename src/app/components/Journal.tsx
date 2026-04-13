@@ -256,3 +256,5 @@ export function Journal() {
     </PageTransition>
   );
 }
+
+export default Journal;

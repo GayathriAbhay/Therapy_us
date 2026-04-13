@@ -244,3 +244,5 @@ export function Heal() {
     </PageTransition>
   );
 }
+
+export default Heal;

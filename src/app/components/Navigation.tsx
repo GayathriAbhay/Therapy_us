@@ -72,3 +72,5 @@ export function Navigation() {
     </motion.nav>
   );
 }
+
+export default Navigation;

@@ -255,3 +255,5 @@ export function Home() {
     </PageTransition>
   );
 }
+
+export default Home;

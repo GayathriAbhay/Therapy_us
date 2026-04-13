@@ -211,3 +211,5 @@ export function Talk() {
     </PageTransition>
   );
 }
+
+export default Talk;

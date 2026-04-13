@@ -255,3 +255,5 @@ export function Dates() {
     </PageTransition>
   );
 }
+
+export default Dates;
