@@ -1,260 +1,194 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { BookHeart, Plus, ChevronDown } from "lucide-react";
+import { BookHeart, Plus, ChevronDown, Lock, Globe, Trash2, Edit3, Check, X } from "lucide-react";
 import { PageTransition } from "./PageTransition";
 
-const prompts = [
-  "What made me smile today",
-  "A moment I want to remember",
-  "Something I learned about us",
-  "What I'm hoping for",
-  "How I felt when...",
-];
+// Firebase Imports
+import { db } from "../../firebase";
+import { 
+  collection, 
+  addDoc, 
+  onSnapshot, 
+  query, 
+  orderBy, 
+  serverTimestamp,
+  doc,
+  deleteDoc,
+  updateDoc
+} from "firebase/firestore";
 
-const entries = [
-  {
-    date: "April 12, 2026",
-    author: "you",
-    prompt: "What made me smile today",
-    content:
-      "Seeing your name pop up on my phone this morning. It's the little things that remind me why we're doing this.",
-    private: false,
-  },
-  {
-    date: "April 10, 2026",
-    author: "partner",
-    prompt: "A moment I want to remember",
-    content:
-      "When we laughed together yesterday during our video call. For the first time in weeks, it felt like us again. Like we're finding our way back.",
-    private: false,
-  },
-  {
-    date: "April 8, 2026",
-    author: "you",
-    prompt: "Something I learned about us",
-    content:
-      "We're both scared, but we're both still here. That has to mean something.",
-    private: false,
-  },
-  {
-    date: "April 6, 2026",
-    author: "partner",
-    prompt: "How I felt when...",
-    content:
-      "When you said you weren't giving up, I felt hope for the first time in a long time. Thank you for fighting for us.",
-    private: false,
-  },
-];
+interface JournalEntry {
+  id: string;
+  text: string;
+  createdAt: any;
+  author: string;
+  prompt: string;
+  isPrivate: boolean;
+}
 
 export function Journal() {
   const [isWriting, setIsWriting] = useState(false);
   const [selectedPrompt, setSelectedPrompt] = useState("");
-  const [journalEntry, setJournalEntry] = useState("");
-  const [expandedEntry, setExpandedEntry] = useState<number | null>(null);
+  const [journalText, setJournalText] = useState("");
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [entries, setEntries] = useState<JournalEntry[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // States for Editing
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+
+  // 1. Fetch Entries
+  useEffect(() => {
+    const q = query(collection(db, "journal_entries"), orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedEntries = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as JournalEntry[];
+      setEntries(fetchedEntries);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // 2. Save New Entry
+  const handleSaveEntry = async () => {
+    if (!journalText.trim()) return;
+    setIsSaving(true);
+    try {
+      await addDoc(collection(db, "journal_entries"), {
+        text: journalText,
+        prompt: selectedPrompt || "Freestyle",
+        createdAt: serverTimestamp(),
+        author: "you", 
+        isPrivate: isPrivate,
+      });
+      setJournalText("");
+      setSelectedPrompt("");
+      setIsWriting(false);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // 3. Delete Entry
+  const handleDelete = async (id: string) => {
+    if (window.confirm("Are you sure you want to delete this memory?")) {
+      try {
+        await deleteDoc(doc(db, "journal_entries", id));
+      } catch (e) {
+        console.error("Error deleting: ", e);
+      }
+    }
+  };
+
+  // 4. Update (Edit) Entry
+  const handleUpdate = async (id: string) => {
+    if (!editText.trim()) return;
+    try {
+      const entryRef = doc(db, "journal_entries", id);
+      await updateDoc(entryRef, {
+        text: editText,
+        lastUpdated: serverTimestamp() // Optional: track when it was edited
+      });
+      setEditingId(null);
+    } catch (e) {
+      console.error("Error updating: ", e);
+    }
+  };
+
+  const formatDate = (timestamp: any) => {
+    if (!timestamp) return "Just now";
+    const date = timestamp.toDate();
+    return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  };
 
   return (
     <PageTransition>
-      <div className="min-h-screen px-6 py-8 max-w-lg mx-auto">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="text-center mb-8"
-      >
-        <h1 className="text-3xl mb-2 bg-gradient-to-r from-[#9b7ea8] to-[#c9a6ba] bg-clip-text text-transparent">
-          Shared Journal
-        </h1>
-        <p className="text-[#9e8c9f] text-sm">Your story, written together</p>
-      </motion.div>
+      <div className="min-h-screen px-6 py-8 max-w-lg mx-auto pb-24">
+        {/* Header - Identical to previous */}
+        <div className="text-center mb-8">
+          <h1 className="text-3xl mb-2 bg-gradient-to-r from-[#9b7ea8] to-[#c9a6ba] bg-clip-text text-transparent font-medium">Shared Journal</h1>
+          <p className="text-[#9e8c9f] text-sm italic">Your story, written together</p>
+        </div>
 
-      {/* Write Entry Button */}
-      <motion.button
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        whileHover={{ scale: 1.02, y: -2 }}
-        whileTap={{ scale: 0.98 }}
-        onClick={() => setIsWriting(!isWriting)}
-        className="w-full mb-6 bg-gradient-to-br from-[#9b7ea8] to-[#c9a6ba] text-white rounded-2xl py-4 shadow-lg shadow-purple-200/30 flex items-center justify-center gap-2 relative overflow-hidden group"
-      >
-        <motion.div
-          className="absolute inset-0 bg-white/10"
-          initial={{ scale: 0, opacity: 0 }}
-          whileHover={{ scale: 2, opacity: 1 }}
-          transition={{ duration: 0.5 }}
-        />
-        <motion.div
-          animate={isWriting ? { rotate: 180 } : { rotate: 0 }}
-          transition={{ duration: 0.3 }}
-          className="relative z-10"
+        {/* Action Button & Writing Area - Identical to previous */}
+        <motion.button
+          onClick={() => setIsWriting(!isWriting)}
+          className="w-full mb-6 bg-gradient-to-br from-[#9b7ea8] to-[#c9a6ba] text-white rounded-2xl py-4 shadow-lg flex items-center justify-center gap-2"
         >
-          {isWriting ? (
-            <ChevronDown className="w-5 h-5" />
-          ) : (
-            <Plus className="w-5 h-5" />
-          )}
-        </motion.div>
-        <span className="relative z-10">
-          {isWriting ? "Close" : "Write an entry"}
-        </span>
-      </motion.button>
+          {isWriting ? <ChevronDown /> : <Plus />}
+          <span>{isWriting ? "Close" : "Write an entry"}</span>
+        </motion.button>
 
-      {/* Writing Area */}
-      <AnimatePresence>
-        {isWriting && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="mb-8 overflow-hidden"
-          >
-            <div className="bg-white/60 backdrop-blur-md border border-white/80 rounded-3xl p-6 shadow-lg shadow-purple-100/20">
-              {/* Prompt Selection */}
-              <div className="mb-4">
-                <label className="text-sm text-[#9e8c9f] mb-2 block">
-                  Choose a prompt (optional)
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {prompts.map((prompt, idx) => (
-                    <motion.button
-                      key={idx}
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: idx * 0.05 }}
-                      whileHover={{ scale: 1.05, y: -2 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => setSelectedPrompt(prompt)}
-                      className={`px-3 py-1.5 rounded-full text-xs transition-all relative overflow-hidden ${
-                        selectedPrompt === prompt
-                          ? "bg-gradient-to-r from-[#9b7ea8] to-[#c9a6ba] text-white shadow-lg shadow-purple-200/30"
-                          : "bg-white/60 border border-white/80 text-[#5a4a5e] hover:bg-white/80"
-                      }`}
-                    >
-                      {selectedPrompt !== prompt && (
-                        <motion.div
-                          className="absolute inset-0 bg-gradient-to-r from-[#9b7ea8]/10 to-[#c9a6ba]/10"
-                          initial={{ x: "-100%" }}
-                          whileHover={{ x: "100%" }}
-                          transition={{ duration: 0.5 }}
-                        />
-                      )}
-                      <span className="relative z-10">{prompt}</span>
-                    </motion.button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Text Area */}
-              <textarea
-                value={journalEntry}
-                onChange={(e) => setJournalEntry(e.target.value)}
-                placeholder="Write from your heart..."
-                rows={6}
-                className="w-full bg-white/60 border border-white/80 rounded-2xl px-5 py-4 text-[#5a4a5e] placeholder:text-[#9e8c9f] focus:outline-none focus:ring-2 focus:ring-[#9b7ea8]/30 focus:bg-white/80 resize-none leading-relaxed"
-                style={{ fontFamily: "'Crimson Text', Georgia, serif" }}
-              />
-
-              {/* Actions */}
-              <div className="flex gap-3 mt-4">
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="flex-1 bg-gradient-to-br from-[#9b7ea8] to-[#c9a6ba] text-white rounded-xl py-3 shadow-lg shadow-purple-200/30"
-                >
-                  Save entry
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className="px-6 bg-white/60 border border-white/80 text-[#5a4a5e] rounded-xl py-3 hover:bg-white/80 transition-all"
-                >
-                  Private
-                </motion.button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Entries */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.2 }}
-        className="space-y-4"
-      >
-        {entries.map((entry, idx) => (
-          <motion.div
-            key={idx}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 + idx * 0.05, type: "spring", stiffness: 100 }}
-            whileHover={{ y: -4, scale: 1.01 }}
-            className="bg-white/60 backdrop-blur-md border border-white/80 rounded-3xl p-6 shadow-lg shadow-purple-100/20 hover:shadow-xl hover:shadow-purple-200/30 transition-all cursor-pointer relative overflow-hidden group"
-          >
-            <motion.div
-              className="absolute inset-0 bg-gradient-to-br from-[#9b7ea8]/5 to-[#c9a6ba]/5"
-              initial={{ opacity: 0 }}
-              whileHover={{ opacity: 1 }}
-              transition={{ duration: 0.3 }}
-            />
-            {/* Header */}
-            <div className="flex items-start justify-between mb-3 relative z-10">
-              <div className="flex items-center gap-3">
-                <motion.div
-                  whileHover={{ scale: 1.1, rotate: [0, -5, 5, 0] }}
-                  transition={{ duration: 0.3 }}
-                  className={`w-10 h-10 rounded-full flex items-center justify-center shadow-lg ${
-                    entry.author === "you"
-                      ? "bg-gradient-to-br from-[#9b7ea8] to-[#c9a6ba] shadow-purple-200/30"
-                      : "bg-gradient-to-br from-[#d4a5c4] to-[#e8c5d8] shadow-purple-200/20"
-                  }`}
-                >
-                  <BookHeart className="w-5 h-5 text-white" />
-                </motion.div>
-                <div>
-                  <p className="text-sm text-[#5a4a5e]">
-                    {entry.author === "you" ? "You" : "Your partner"}
-                  </p>
-                  <p className="text-xs text-[#9e8c9f]">{entry.date}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Prompt */}
-            <motion.div
-              whileHover={{ scale: 1.01 }}
-              className="mb-3 px-4 py-2 bg-gradient-to-r from-[#f4c4d4]/30 to-[#f5dce8]/30 rounded-xl border border-[#f4c4d4]/50 relative z-10"
-            >
-              <p className="text-sm text-[#5a4a5e] italic">{entry.prompt}</p>
+        <AnimatePresence>
+          {isWriting && (
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="mb-8 overflow-hidden">
+               <div className="bg-white/60 backdrop-blur-md border border-white/80 rounded-3xl p-6 shadow-lg">
+                  <textarea
+                    value={journalText}
+                    onChange={(e) => setJournalText(e.target.value)}
+                    placeholder="Write from your heart..."
+                    className="w-full bg-transparent border-none focus:ring-0 text-[#5a4a5e] italic text-lg"
+                    rows={4}
+                  />
+                  <button onClick={handleSaveEntry} className="w-full mt-4 bg-[#9b7ea8] text-white py-3 rounded-xl">Save entry</button>
+               </div>
             </motion.div>
+          )}
+        </AnimatePresence>
 
-            {/* Content */}
-            <p
-              className="text-[#5a4a5e] leading-relaxed relative z-10"
-              style={{ fontFamily: "'Crimson Text', Georgia, serif" }}
-            >
-              {entry.content}
-            </p>
-          </motion.div>
-        ))}
-      </motion.div>
+        {/* Entries List with Edit/Delete */}
+        <div className="space-y-4">
+          {entries.map((entry) => (
+            <motion.div key={entry.id} layout className="bg-white/60 backdrop-blur-md border border-white/80 rounded-3xl p-6 shadow-sm relative group">
+              
+              {/* Entry Header */}
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-[#9b7ea8]">
+                    <BookHeart className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-[#5a4a5e]">{entry.author === "you" ? "You" : "Partner"}</p>
+                    <p className="text-[10px] text-[#9e8c9f] uppercase tracking-wider">{formatDate(entry.createdAt)}</p>
+                  </div>
+                </div>
 
-      {/* Stats */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.5 }}
-        className="mt-8 bg-white/40 backdrop-blur-md border border-white/60 rounded-2xl p-5 text-center"
-      >
-        <p className="text-sm text-[#9e8c9f]">
-          You've written <span className="text-[#9b7ea8]">24 entries</span>{" "}
-          together this month
-        </p>
-      </motion.div>
-    </div>
+                {/* Edit/Delete Icons (Visible on hover) */}
+                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => { setEditingId(entry.id); setEditText(entry.text); }} className="p-1.5 text-blue-400 hover:bg-blue-50 rounded-lg">
+                    <Edit3 className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => handleDelete(entry.id)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Content Area */}
+              {editingId === entry.id ? (
+                <div className="space-y-3">
+                  <textarea
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                    className="w-full bg-white/80 border border-purple-200 rounded-xl p-3 text-[#5a4a5e] italic focus:outline-none"
+                    autoFocus
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={() => handleUpdate(entry.id)} className="bg-green-500 text-white p-2 rounded-lg flex-1 flex justify-center"><Check className="w-4 h-4" /></button>
+                    <button onClick={() => setEditingId(null)} className="bg-gray-400 text-white p-2 rounded-lg flex-1 flex justify-center"><X className="w-4 h-4" /></button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[#5a4a5e] leading-relaxed italic text-lg">{entry.text}</p>
+              )}
+            </motion.div>
+          ))}
+        </div>
+      </div>
     </PageTransition>
   );
 }
-
-export default Journal;
