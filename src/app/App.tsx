@@ -16,7 +16,7 @@ export function App() {
     <div className="min-h-screen bg-[#FFFDF9] text-[#4A4238]">
       <FloatingElements />
       <Navigation />
-      <main className="md:pl-64 min-h-screen">
+      <main className="min-h-screen transition-all duration-300">  
         <AnimatePresence mode="wait">
           <Routes location={location} key={location.pathname}>
             <Route path="/" element={<PageTransition><Home /></PageTransition>} />
