@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import { db } from "../../firebase";
 import { 
   collection, 
@@ -9,26 +9,26 @@ import {
   orderBy, 
   serverTimestamp 
 } from "firebase/firestore";
-import { Send, RefreshCw, Heart } from "lucide-react";
+import { Send, Heart } from "lucide-react";
 
 export function Talk() {
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // --- ROLE LOGIC ---
-  // We store the role in localStorage so the device remembers who it is
-  const [myRole, setMyRole] = useState(localStorage.getItem("chat_role") || "user1");
+  // --- AUTOMATIC ROLE ASSIGNMENT ---
+  // This generates a unique ID for this specific browser/phone
+  const [deviceId] = useState(() => {
+    let id = localStorage.getItem("chat_device_id");
+    if (!id) {
+      id = Math.random().toString(36).substring(7);
+      localStorage.setItem("chat_device_id", id);
+    }
+    return id;
+  });
 
   const spaceId = "Marapatti130922";
 
-  const toggleRole = () => {
-    const newRole = myRole === "user1" ? "user2" : "user1";
-    setMyRole(newRole);
-    localStorage.setItem("chat_role", newRole);
-  };
-
-  // 1. Listen for messages
   useEffect(() => {
     const q = query(
       collection(db, "spaces", spaceId, "messages"),
@@ -47,7 +47,6 @@ export function Talk() {
     return () => unsub();
   }, []);
 
-  // 2. Send Message
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
@@ -58,7 +57,7 @@ export function Talk() {
     try {
       await addDoc(collection(db, "spaces", spaceId, "messages"), {
         text: textToSend,
-        sender: myRole, // This is key: it labels the message as yours
+        senderId: deviceId, // Use the unique device ID instead of 'user1'
         timestamp: serverTimestamp(),
       });
     } catch (err) {
@@ -69,51 +68,38 @@ export function Talk() {
   return (
     <div className="flex flex-col h-screen max-w-lg mx-auto bg-[#FFFDF9] relative">
       {/* Header */}
-      <div className="p-6 border-b border-purple-50 bg-white/60 backdrop-blur-md flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-medium bg-gradient-to-r from-[#9b7ea8] to-[#c9a6ba] bg-clip-text text-transparent italic">
-            Our Conversation
-          </h1>
-          <p className="text-[10px] text-[#9e8c9f] uppercase tracking-widest">
-            Logged in as: <span className="text-[#9b7ea8] font-bold">{myRole === "user1" ? "Partner A" : "Partner B"}</span>
-          </p>
-        </div>
-        
-        {/* Role Switcher - Click this on ONE device to fix the alignment */}
-        <button 
-          onClick={toggleRole}
-          className="p-2 bg-purple-50 rounded-full text-[#9b7ea8] hover:bg-purple-100 transition-colors"
-          title="Switch Role"
-        >
-          <RefreshCw className="w-4 h-4" />
-        </button>
+      <div className="p-6 border-b border-purple-50 bg-white/60 backdrop-blur-md">
+        <h1 className="text-2xl font-medium bg-gradient-to-r from-[#9b7ea8] to-[#c9a6ba] bg-clip-text text-transparent italic">
+          Our Conversation
+        </h1>
+        <p className="text-[10px] text-[#9e8c9f] uppercase tracking-widest mt-1">
+          End-to-end encrypted connection
+        </p>
       </div>
 
       {/* Message List */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-32">
-        {messages.map((msg) => (
-          <motion.div
-            key={msg.id}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className={`flex ${msg.sender === myRole ? "justify-end" : "justify-start"}`}
-          >
-            <div className={`max-w-[80%] p-4 rounded-[2rem] shadow-sm relative ${
-              msg.sender === myRole 
-                ? "bg-[#9b7ea8] text-white rounded-tr-none shadow-purple-100" 
-                : "bg-white border border-purple-50 text-[#5a4a5e] rounded-tl-none"
-            }`}>
-              <p className="text-sm leading-relaxed">{msg.text}</p>
-              
-              {/* Optional: Small tail for the bubble */}
-              <div className={`absolute top-0 w-4 h-4 ${
-                msg.sender === myRole 
-                ? "bg-[#9b7ea8] -right-1 rounded-bl-full" 
-                : "bg-white -left-1 rounded-br-full border-t border-l border-purple-50"
-              }`} />
-            </div>
-          </motion.div>
-        ))}
+      <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-40">
+        {messages.map((msg) => {
+          // KEY LOGIC: If the message senderId matches THIS device, put it on the right.
+          const isMe = msg.senderId === deviceId;
+          
+          return (
+            <motion.div
+              key={msg.id}
+              initial={{ opacity: 0, x: isMe ? 20 : -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className={`flex ${isMe ? "justify-end" : "justify-start"}`}
+            >
+              <div className={`max-w-[75%] p-4 rounded-[2rem] shadow-sm relative ${
+                isMe 
+                  ? "bg-[#9b7ea8] text-white rounded-tr-none" 
+                  : "bg-white border border-purple-50 text-[#5a4a5e] rounded-tl-none"
+              }`}>
+                <p className="text-sm leading-relaxed">{msg.text}</p>
+              </div>
+            </motion.div>
+          );
+        })}
         <div ref={scrollRef} />
       </div>
 
@@ -126,7 +112,7 @@ export function Talk() {
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Type a message..."
+            placeholder="Write to each other..."
             className="flex-1 bg-transparent px-4 py-2 outline-none text-[#5a4a5e] text-sm"
           />
           <button 
