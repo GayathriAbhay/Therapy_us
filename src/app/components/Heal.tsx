@@ -1,187 +1,234 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Lock, CheckCircle2, Circle, ArrowLeft, Check, ChevronRight, Save, Sparkles, MessageCircle, Heart } from "lucide-react";
+import { 
+  Lock, CheckCircle2, Circle, ArrowLeft, Sparkles, 
+  Heart, Brain, Zap, ShieldCheck, MessageSquare, ChevronRight,
+  Bot, ChevronLeft
+} from "lucide-react";
 import { PageTransition } from "./PageTransition";
 
-// 1. Comprehensive Session Database
-const sessionContent: Record<number, { 
-  steps: { title: string; description: string; type: "info" | "exercise" | "reflect" }[] 
-}> = {
-  1: {
-    steps: [
-      { title: "Introduction", description: "Sit in a quiet space together. Take three deep breaths to arrive in this moment.", type: "info" },
-      { title: "The Mirror Exercise", description: "Look into your partner's eyes for 60 seconds without speaking. Notice any feelings that arise.", type: "exercise" },
-      { title: "Deep Reflection", description: "What was the most difficult part of staying present just now?", type: "reflect" }
-    ]
-  },
-  2: {
-    steps: [
-      { title: "Safe Communication", description: "Today we practice the 'I feel' statement. It removes blame and invites understanding.", type: "info" },
-      { title: "The Vulnerability Share", description: "Share one small thing you've been hesitant to mention this week. Your partner will only listen.", type: "exercise" },
-      { title: "Reflect", description: "How did it feel to be heard without being interrupted?", type: "reflect" }
-    ]
-  }
-};
+// Firebase Imports
+import { db } from "../../firebase";
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
+
+// 1. THE 20-PATHWAY DATABASE
+const pathways = [
+  { id: 1, title: "Initial Connection", icon: <Heart className="w-5 h-5"/>, desc: "Re-establishing the safety to speak." },
+  { id: 2, title: "The Anatomy of Hurt", icon: <Brain className="w-5 h-5"/>, desc: "Breaking down triggers and pain points." },
+  { id: 3, title: "Building Safety", icon: <ShieldCheck className="w-5 h-5"/>, desc: "Creating a 'No-Judgment' zone." },
+  { id: 4, title: "Active Listening", icon: <Zap className="w-5 h-5"/>, desc: "Hearing what isn't being said." },
+  { id: 5, title: "Vulnerability Lab", icon: <Sparkles className="w-5 h-5"/>, desc: "Sharing fears without the armor." },
+  { id: 6, title: "Trust Foundations", icon: <Lock className="w-5 h-5"/>, desc: "Small actions that build big trust." },
+  { id: 7, title: "Conflict Resolution", icon: <Zap className="w-5 h-5"/>, desc: "Fighting fair and finding solutions." },
+  { id: 8, title: "Forgiveness: Part 1", icon: <Heart className="w-5 h-5"/>, desc: "Letting go of the heavy weight." },
+  { id: 9, title: "Forgiveness: Part 2", icon: <Heart className="w-5 h-5"/>, desc: "Accepting the new version of us." },
+  { id: 10, title: "Intimacy Rebuild", icon: <Sparkles className="w-5 h-5"/>, desc: "Emotional and physical closeness." },
+  { id: 11, title: "Shadow Work", icon: <Brain className="w-5 h-5"/>, desc: "Addressing personal baggage." },
+  { id: 12, title: "Future Mapping", icon: <Zap className="w-5 h-5"/>, desc: "Aligning your life goals." },
+  { id: 13, title: "Communication Habits", icon: <MessageSquare className="w-5 h-5"/>, desc: "Daily rituals for talking." },
+  { id: 14, title: "The Power of Play", icon: <Sparkles className="w-5 h-5"/>, desc: "Rediscovering fun and laughter." },
+  { id: 15, title: "Boundaries Lab", icon: <ShieldCheck className="w-5 h-5"/>, desc: "Healthy lines for a healthy pair." },
+  { id: 16, title: "Ego Dissolution", icon: <Brain className="w-5 h-5"/>, desc: "Moving from 'Me' to 'Us'." },
+  { id: 17, title: "Resilience Building", icon: <Zap className="w-5 h-5"/>, desc: "Preparing for future storms." },
+  { id: 18, title: "Apology Language", icon: <MessageSquare className="w-5 h-5"/>, desc: "Learning how to truly say sorry." },
+  { id: 19, title: "Shared Values", icon: <ShieldCheck className="w-5 h-5"/>, desc: "Defining what your unit stands for." },
+  { id: 20, title: "The New Chapter", icon: <Heart className="w-5 h-5"/>, desc: "Celebrating the healed version of you." }
+];
+
+const therapistPrompts = [
+  "That is a powerful realization. How does your body feel as you share this?",
+  "I see deep growth here. Remember, healing is a spiral, not a straight line.",
+  "This is a brave admission. How can your partner support this specific need?",
+  "Acknowledgment is 50% of the cure. You are doing the hard work together."
+];
 
 export function Heal() {
-  const [activeModuleId, setActiveModuleId] = useState<number | null>(null);
-  const [activeSessionNum, setActiveSessionNum] = useState<number | null>(null);
+  const [activePath, setActivePath] = useState<any>(null);
   const [currentStep, setCurrentStep] = useState(0);
-  
-  // 2. Persistent State (To be synced with Firebase)
-  const [completedSessions, setCompletedSessions] = useState<Record<number, number[]>>(() => {
-    const saved = localStorage.getItem("therapy_progress");
-    return saved ? JSON.parse(saved) : { 1: [1] }; // Default Module 1, Session 1 done
-  });
+  const [reflection, setReflection] = useState("");
+  const [aiResponse, setAiResponse] = useState("");
+  const [completedIds, setCompletedIds] = useState<number[]>([]);
 
-  const [reflections, setReflections] = useState<Record<string, string>>(() => {
-    const saved = localStorage.getItem("therapy_reflections");
-    return saved ? JSON.parse(saved) : {};
-  });
+  const spaceId = "Marapatti130922";
 
-  // 3. Extended Module List
-  const modules = [
-    { id: 1, title: "Understanding the hurt", description: "Acknowledge what happened and its impact.", sessions: 4 },
-    { id: 2, title: "Opening up safely", description: "Learn to express feelings without fear.", sessions: 6 },
-    { id: 3, title: "Rebuilding trust", description: "Small steps toward believing again.", sessions: 8 },
-    { id: 4, title: "Forgiveness practices", description: "Release resentment and find peace.", sessions: 5 },
-    { id: 5, title: "Creating new patterns", description: "Build healthy habits for the future.", sessions: 6 }
-  ];
-
-  // Sync with LocalStorage (Replace with Firebase in production)
   useEffect(() => {
-    localStorage.setItem("therapy_progress", JSON.stringify(completedSessions));
-    localStorage.setItem("therapy_reflections", JSON.stringify(reflections));
-  }, [completedSessions, reflections]);
-
-  const toggleTick = (modId: number, sessNum: number) => {
-    setCompletedSessions(prev => {
-      const current = prev[modId] || [];
-      const updated = current.includes(sessNum) ? current.filter(n => n !== sessNum) : [...current, sessNum];
-      return { ...prev, [modId]: updated };
+    const unsub = onSnapshot(doc(db, "spaces", spaceId), (doc) => {
+      if (doc.exists() && doc.data().healingProgress) {
+        setCompletedIds(doc.data().healingProgress);
+      }
     });
+    return () => unsub();
+  }, []);
+
+  const updateFirebaseProgress = async (newList: number[]) => {
+    try {
+      await setDoc(doc(db, "spaces", spaceId), {
+        healingProgress: newList
+      }, { merge: true });
+    } catch (e) {
+      console.error("Error saving progress:", e);
+    }
   };
 
-  const currentSteps = activeSessionNum ? (sessionContent[activeSessionNum]?.steps || sessionContent[1].steps) : [];
+  const toggleComplete = (id: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newList = completedIds.includes(id) 
+      ? completedIds.filter(i => i !== id) 
+      : [...completedIds, id];
+    setCompletedIds(newList);
+    updateFirebaseProgress(newList);
+  };
+
+  const handleNext = () => {
+    if (currentStep === 2) {
+      setAiResponse(therapistPrompts[Math.floor(Math.random() * therapistPrompts.length)]);
+      setCurrentStep(3);
+    } else if (currentStep === 3) {
+      if (!completedIds.includes(activePath.id)) {
+        const newList = [...completedIds, activePath.id];
+        setCompletedIds(newList);
+        updateFirebaseProgress(newList);
+      }
+      setActivePath(null);
+      setCurrentStep(0);
+      setReflection("");
+    } else {
+      setCurrentStep(currentStep + 1);
+    }
+  };
+
+  const handlePrev = () => {
+    if (currentStep > 0) {
+      setCurrentStep(currentStep - 1);
+      if (currentStep === 3) setAiResponse(""); 
+    }
+  };
 
   return (
     <PageTransition>
-      <div className="min-h-screen px-6 py-8 max-w-lg mx-auto pb-32">
-        <AnimatePresence mode="wait">
-          {activeModuleId === null ? (
-            /* VIEW 1: PATHWAY LIST */
-            <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <div className="text-center mb-10">
-                <h1 className="text-3xl mb-2 bg-gradient-to-r from-[#9b7ea8] to-[#c9a6ba] bg-clip-text text-transparent font-medium italic">Healing Journey</h1>
-                <p className="text-[#9e8c9f] text-sm italic">Take your time. Healing is not a race.</p>
-              </div>
+      <div className="min-h-screen px-6 py-8 max-w-lg mx-auto pb-44">
+        {!activePath ? (
+          <div className="space-y-6">
+            <header className="text-center mb-8">
+              <h1 className="text-3xl font-medium bg-gradient-to-r from-[#9b7ea8] to-[#c9a6ba] bg-clip-text text-transparent italic text-center">Healing Roadmap</h1>
+              <p className="text-[#9e8c9f] text-sm italic">{completedIds.length} of 20 stages completed</p>
+            </header>
 
-              <div className="space-y-4">
-                {modules.map((m) => {
-                  const done = completedSessions[m.id] || [];
-                  const progress = (done.length / m.sessions) * 100;
-                  return (
-                    <div key={m.id} className="bg-white/60 border border-white/80 rounded-[2.5rem] p-6 shadow-sm">
-                      <div className="flex justify-between items-center mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className={`p-2 rounded-full ${progress === 100 ? 'bg-[#9b7ea8]' : 'bg-purple-50'}`}>
-                            {progress === 100 ? <CheckCircle2 className="w-4 h-4 text-white" /> : <Heart className="w-4 h-4 text-[#9b7ea8]" />}
-                          </div>
-                          <h3 className="text-[#5a4a5e] font-semibold">{m.title}</h3>
-                        </div>
-                        <button onClick={() => setActiveModuleId(m.id)} className="text-[10px] font-bold text-[#9b7ea8] tracking-widest hover:underline uppercase">Sessions</button>
-                      </div>
-                      <div className="flex gap-1.5 h-1.5">
-                        {Array.from({ length: m.sessions }).map((_, i) => (
-                          <div key={i} className={`flex-1 rounded-full transition-colors duration-700 ${done.includes(i + 1) ? "bg-[#9b7ea8]" : "bg-white/40"}`} />
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </motion.div>
-          ) : activeSessionNum === null ? (
-            /* VIEW 2: SESSION SELECTOR (Manage Ticks Here) */
-            <motion.div key="selector" initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -20, opacity: 0 }}>
-              <button onClick={() => setActiveModuleId(null)} className="flex items-center gap-2 text-[#9e8c9f] mb-6"><ArrowLeft className="w-4 h-4" /> <span>Back to Pathway</span></button>
-              <h2 className="text-2xl text-[#5a4a5e] mb-8 font-medium italic">{modules.find(m => m.id === activeModuleId)?.title}</h2>
-              <div className="space-y-3">
-                {Array.from({ length: modules.find(m => m.id === activeModuleId)?.sessions || 0 }).map((_, i) => {
-                  const sNum = i + 1;
-                  const isDone = (completedSessions[activeModuleId] || []).includes(sNum);
-                  return (
-                    <div key={i} className="flex items-center gap-4 bg-white/70 p-5 rounded-3xl border border-white/80 shadow-sm transition-all hover:bg-white/90">
-                      <button onClick={() => toggleTick(activeModuleId, sNum)}>
-                        {isDone ? <CheckCircle2 className="w-6 h-6 text-[#9b7ea8]" /> : <Circle className="w-6 h-6 text-[#e8d5db]" />}
-                      </button>
-                      <button onClick={() => {setActiveSessionNum(sNum); setCurrentStep(0);}} className="flex-1 text-left text-[#5a4a5e] font-medium">Session {sNum}</button>
-                      <PlayCircle className={`w-5 h-5 ${isDone ? 'text-[#9b7ea8]' : 'text-[#e8d5db]'}`} />
-                    </div>
-                  );
-                })}
-              </div>
-            </motion.div>
-          ) : (
-            /* VIEW 3: ACTUAL SESSION PLAYER */
-            <motion.div key="player" initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
-              <button onClick={() => setActiveSessionNum(null)} className="flex items-center gap-2 text-[#9e8c9f] mb-6"><ArrowLeft className="w-4 h-4" /> <span>Quit Session</span></button>
-              <div className="bg-white/95 backdrop-blur-xl p-8 rounded-[3rem] shadow-2xl min-h-[500px] flex flex-col border border-white">
-                <div className="flex justify-between items-center mb-12">
-                   <span className="text-[10px] font-bold text-[#9b7ea8] tracking-[0.2em] uppercase">Step {currentStep + 1} of {currentSteps.length}</span>
-                   <div className="flex gap-1">
-                      {currentSteps.map((_, i) => <div key={i} className={`h-1 w-4 rounded-full transition-all ${i <= currentStep ? "bg-[#9b7ea8]" : "bg-[#e8d5db]"}`} />)}
-                   </div>
-                </div>
-                
-                <div className="flex-1">
-                  <h3 className="text-2xl text-[#5a4a5e] mb-6 font-medium italic">{currentSteps[currentStep].title}</h3>
-                  <p className="text-[#9e8c9f] text-lg leading-relaxed mb-10 italic">"{currentSteps[currentStep].description}"</p>
-                  
-                  {currentSteps[currentStep].type === "reflect" && (
-                    <div className="space-y-4">
-                      <textarea
-                        value={reflections[`${activeModuleId}-${activeSessionNum}`] || ""}
-                        onChange={(e) => setReflections({ ...reflections, [`${activeModuleId}-${activeSessionNum}`]: e.target.value })}
-                        placeholder="Type your reflection together..."
-                        className="w-full bg-[#faf7f5] border border-[#e8d5db] rounded-[2rem] p-6 text-[#5a4a5e] h-40 shadow-inner focus:outline-none focus:ring-2 focus:ring-[#9b7ea8]/20"
-                      />
-                      <div className="flex items-center justify-end gap-2 text-[10px] font-bold text-[#9b7ea8] uppercase">
-                        <Save className="w-3 h-3" /> Auto-saved to Cloud
-                      </div>
-                    </div>
-                  )}
-                </div>
+            <div className="grid grid-cols-1 gap-4">
+              {pathways.map((path) => (
+                <motion.div
+                  key={path.id}
+                  layout
+                  onClick={() => setActivePath(path)}
+                  className={`bg-white/60 backdrop-blur-md border border-white/80 rounded-[2rem] p-5 shadow-sm cursor-pointer flex items-center gap-4 transition-all ${
+                    completedIds.includes(path.id) ? "opacity-70" : "hover:shadow-md"
+                  }`}
+                >
+                  <button onClick={(e) => toggleComplete(path.id, e)} className="relative z-10">
+                    {completedIds.includes(path.id) ? (
+                      <CheckCircle2 className="w-6 h-6 text-[#9b7ea8]" />
+                    ) : (
+                      <Circle className="w-6 h-6 text-[#e8d5db]" />
+                    )}
+                  </button>
+                  <div className="w-10 h-10 bg-purple-50 rounded-2xl flex items-center justify-center text-[#9b7ea8]">{path.icon}</div>
+                  <div className="flex-1">
+                    <h3 className={`text-[#5a4a5e] font-bold text-sm ${completedIds.includes(path.id) ? "line-through" : ""}`}>{path.title}</h3>
+                    <p className="text-[10px] text-[#9e8c9f] italic">{path.desc}</p>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-[#e8d5db]" />
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
+            <button onClick={() => setActivePath(null)} className="mb-6 flex items-center gap-2 text-[#9e8c9f] text-sm">
+              <ArrowLeft className="w-4 h-4" /> Back to Roadmap
+            </button>
 
-                <div className="flex gap-4 mt-12">
-                  {currentStep < currentSteps.length - 1 ? (
-                    <button onClick={() => setCurrentStep(currentStep + 1)} className="flex-1 bg-[#9b7ea8] text-white py-4 rounded-2xl font-bold shadow-lg flex items-center justify-center gap-2">
-                      Next Step <ChevronRight className="w-4 h-4" />
-                    </button>
-                  ) : (
+            <div className="bg-white/95 p-8 rounded-[3rem] shadow-2xl min-h-[480px] flex flex-col border border-white">
+              <div className="mb-8">
+                <span className="text-[10px] font-bold text-[#9b7ea8] uppercase tracking-widest block">
+                  {activePath.title} • {currentStep === 3 ? "AI Guidance" : `Step ${currentStep + 1}`}
+                </span>
+                <div className="flex gap-1 mt-3">
+                  {[0, 1, 2, 3].map(i => (
                     <button 
-                      onClick={() => { if (!(completedSessions[activeModuleId] || []).includes(activeSessionNum)) toggleTick(activeModuleId, activeSessionNum); setActiveSessionNum(null); }} 
-                      className="flex-1 bg-gradient-to-r from-[#9b7ea8] to-[#c9a6ba] text-white py-4 rounded-2xl font-bold shadow-xl flex items-center justify-center gap-2"
-                    >
-                      <Sparkles className="w-4 h-4" /> Complete & Exit
-                    </button>
-                  )}
+                      key={i} 
+                      onClick={() => i < currentStep && setCurrentStep(i)}
+                      className={`h-1 flex-1 rounded-full transition-all ${i <= currentStep ? "bg-[#9b7ea8]" : "bg-purple-50"}`} 
+                    />
+                  ))}
                 </div>
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+
+              <div className="flex-1">
+                <AnimatePresence mode="wait">
+                  {currentStep === 0 && (
+                    <motion.div key="s1" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                      <h2 className="text-2xl font-medium text-[#5a4a5e] mb-4">Centering</h2>
+                      <p className="text-[#9e8c9f] text-lg italic leading-relaxed">"Close your eyes. Imagine a safe place where only the two of you exist. Breathe together for 60 seconds."</p>
+                    </motion.div>
+                  )}
+                  {currentStep === 1 && (
+                    <motion.div key="s2" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                      <h2 className="text-2xl font-medium text-[#5a4a5e] mb-4">Sharing</h2>
+                      <p className="text-[#9e8c9f] text-lg italic leading-relaxed">"Today's prompt: What is one thing you appreciate about how we handled our last disagreement?"</p>
+                    </motion.div>
+                  )}
+                  {currentStep === 2 && (
+                    <motion.div key="s3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                      <div className="flex items-center gap-2 mb-4">
+                        <Bot className="w-5 h-5 text-[#9b7ea8]" />
+                        <h2 className="text-xl font-medium text-[#5a4a5e]">Personal Reflection</h2>
+                      </div>
+                      <textarea 
+                        value={reflection}
+                        onChange={(e) => setReflection(e.target.value)}
+                        placeholder="Write your heart out... AI therapist will listen."
+                        className="w-full h-40 p-5 rounded-[2rem] bg-purple-50/30 border-none text-[#5a4a5e] italic focus:ring-2 focus:ring-purple-100 outline-none"
+                      />
+                    </motion.div>
+                  )}
+                  {currentStep === 3 && (
+                    <motion.div key="s4" initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
+                      <div className="bg-gradient-to-br from-[#9b7ea8] to-[#c9a6ba] p-6 rounded-[2.5rem] text-white shadow-xl relative">
+                        <Sparkles className="absolute top-4 right-4 w-5 h-5 opacity-50" />
+                        <p className="text-lg italic leading-relaxed">"{aiResponse}"</p>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              <div className="flex gap-3 mt-8">
+                {currentStep > 0 && (
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handlePrev}
+                    className="px-6 py-5 rounded-2xl font-bold bg-white border border-purple-100 text-[#9e8c9f]"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </motion.button>
+                )}
+                <button 
+                  onClick={handleNext}
+                  disabled={currentStep === 2 && !reflection.trim()}
+                  className={`flex-1 py-5 rounded-2xl font-bold shadow-xl transition-all ${
+                    currentStep === 2 && !reflection.trim() 
+                    ? "bg-gray-100 text-gray-400" 
+                    : "bg-gradient-to-r from-[#9b7ea8] to-[#c9a6ba] text-white"
+                  }`}
+                >
+                  {currentStep === 2 ? "Get AI Guidance" : currentStep === 3 ? "Finish & Log Stage" : "Continue"}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
       </div>
     </PageTransition>
-  );
-}
-
-// Helper component for Play icon
-function PlayCircle({ className }: { className?: string }) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/>
-    </svg>
   );
 }
 

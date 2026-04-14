@@ -1,296 +1,182 @@
-import { useState, useEffect } from "react";
-import { motion } from "motion/react";
-import { Heart, Video, Clock, Copy, Check, Edit2 } from "lucide-react";
+import { useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import { 
+  Heart, 
+  Clock, 
+  Copy, 
+  Check, 
+  Edit2, 
+  ExternalLink, 
+  ChevronRight, 
+  X,
+  VideoIcon
+} from "lucide-react";
 import { PageTransition } from "./PageTransition";
 
-const categories = ["All", "At-home", "Online", "Free", "Low-budget"];
-
 const dateIdeas = [
-  {
-    title: "Virtual Movie Night",
-    description: "Watch a meaningful film together and discuss what it meant to you both",
-    category: "Online",
-    mood: "reconnecting",
-    image: "🎬",
-  },
-  {
-    title: "Cook Together Apart",
-    description: "Make the same recipe while video calling, share the meal at the end",
-    category: "At-home",
-    mood: "fun",
-    image: "👨‍🍳",
-  },
-  {
-    title: "Virtual Stargazing",
-    description: "Use an astronomy app and share what constellations mean to you",
-    category: "Free",
-    mood: "calm",
-    image: "⭐",
-  },
-  {
-    title: "Memory Lane Walk",
-    description: "Share screen and look through old photos together, relive happy moments",
-    category: "Free",
-    mood: "reconnecting",
-    image: "📸",
-  },
-  {
-    title: "Sunrise/Sunset Call",
-    description: "Wake up early or stay up late to watch the sky change together",
-    category: "Free",
-    mood: "calm",
-    image: "🌅",
-  },
-  {
-    title: "Online Game Night",
-    description: "Play collaborative games that require teamwork and communication",
-    category: "Online",
-    mood: "fun",
-    image: "🎮",
-  },
+  { title: "Virtual Movie Night", description: "Watch a film together using Teleparty and discuss it over wine.", category: "Online", mood: "reconnecting", image: "🎬" },
+  { title: "Cook Together Apart", description: "Pick a recipe, buy the ingredients, and cook while on a video call.", category: "At-home", mood: "fun", image: "👨‍🍳" },
+  { title: "Virtual Stargazing", description: "Use a Night Sky app to find constellations in your respective cities.", category: "Free", mood: "calm", image: "⭐" },
+  { title: "Memory Lane Walk", description: "Share your screen and look through the very first photos you took together.", category: "Free", mood: "reconnecting", image: "📸" },
+  { title: "Online Game Night", description: "Play collaborative games like 'It Takes Two' or 'Among Us'.", category: "Online", mood: "fun", image: "🎮" },
+  { title: "Digital Escape Room", description: "Work together to solve puzzles against a timer in a virtual room.", category: "Online", mood: "fun", image: "🧩" },
+  { title: "Playlist Exchange", description: "Create 'Songs that remind me of you' playlists and listen live.", category: "Free", mood: "calm", image: "🎵" },
+  { title: "Future Home Tour", description: "Browse Zillow or Pinterest and pick out your dream kitchen and garden.", category: "Free", mood: "calm", image: "🏠" },
+  { title: "YouTube Yoga", description: "Follow a 20-minute gentle yoga session to de-stress together.", category: "Free", mood: "calm", image: "🧘" },
+  { title: "Online Museum Tour", description: "Walk through the Louvre or the British Museum via Google Arts.", category: "Free", mood: "reconnecting", image: "🖼️" },
+  { title: "21 Questions", description: "Deep dive into 'Ask Me Anything' questions to learn something new.", category: "Free", mood: "reconnecting", image: "❓" },
+  { title: "Lego Build-off", description: "Each person buys a small $10 set and you race to build it first.", category: "Low-budget", mood: "fun", image: "🧱" },
+  { title: "Ordering Surprises", description: "Order a surprise $15 dessert for each other via UberEats/Zomato.", category: "Low-budget", mood: "fun", image: "🍕" },
+  { title: "Digital Painting", description: "Use a shared canvas app like Aggie.io to draw a portrait of each other.", category: "Free", mood: "fun", image: "🎨" },
+  { title: "Language Learning", description: "Start a Duolingo streak together in a language you both want to learn.", category: "Free", mood: "fun", image: "🗣️" },
+  { title: "Google Earth Travel", description: "Pick a random city and 'walk' the streets using Street View.", category: "Free", mood: "Adventure", image: "🌍" },
+  { title: "Write a Shared Story", description: "Alternate writing one paragraph each of a short story.", category: "Free", mood: "reconnecting", image: "✍️" },
 ];
 
-const moodColors = {
-  calm: "from-[#d4e5f4] to-[#e8f0f5]",
-  fun: "from-[#f4d4ba] to-[#f5e8d4]",
-  reconnecting: "from-[#f4c4d4] to-[#f5dce8]",
-};
+const categories = ["All", "At-home", "Online", "Free", "Low-budget", "Adventure"];
 
 export function Dates() {
   const [selectedCategory, setSelectedCategory] = useState("All");
-  const [copied, setCopied] = useState(false);
-  const [dateModeOn, setDateModeOn] = useState(false);
+  const [selectedIdea, setSelectedIdea] = useState<any>(null);
+  const [datingMode, setDatingMode] = useState<any>(null);
+  const [nextDate, setNextDate] = useState("Saturday 8:30PM");
   const [isEditingTime, setIsEditingTime] = useState(false);
+  const [copied, setCopied] = useState(false);
+  
+  // Your Specific GMeet Link
+  const meetLink = "meet.google.com/zwn-fewo-ovp";
 
-  // Default state matches your requested format: Monday 9:00PM
-  const [nextDate, setNextDate] = useState("Monday 9:00PM");
-  const [timeUntil, setTimeUntil] = useState("");
-
-  const meetLink = "meet.google.com/abc-defg-hij";
-
-  // Logic to calculate countdown based on the text "Monday 9:00PM"
-  const calculateTimeRemaining = (dateString: string) => {
-    try {
-      const now = new Date();
-      const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-      
-      // Extract day and time from string (e.g., "Monday" and "9:00PM")
-      const parts = dateString.split(" ");
-      if (parts.length < 2) return "Set time...";
-
-      const targetDayName = parts[0];
-      const targetTimeStr = parts[1];
-      
-      const targetDayIndex = days.findIndex(d => d.toLowerCase() === targetDayName.toLowerCase());
-      if (targetDayIndex === -1) return "Invalid day";
-
-      // Calculate how many days until the next occurrence of that day
-      let daysToAdd = (targetDayIndex - now.getDay() + 7) % 7;
-      
-      const targetDate = new Date(now);
-      targetDate.setDate(now.getDate() + daysToAdd);
-
-      // Simple parse for "9:00PM" or "21:00"
-      let [hours, minutes] = targetTimeStr.replace(/[a-zA-Z]/g, "").split(":").map(Number);
-      if (targetTimeStr.toLowerCase().includes("pm") && hours < 12) hours += 12;
-      if (targetTimeStr.toLowerCase().includes("am") && hours === 12) hours = 0;
-
-      targetDate.setHours(hours || 0, minutes || 0, 0, 0);
-
-      // If the time already passed today, move to next week
-      if (targetDate < now) {
-        targetDate.setDate(targetDate.getDate() + 7);
-      }
-
-      const diff = targetDate.getTime() - now.getTime();
-      const h = Math.floor(diff / (1000 * 60 * 60));
-      const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-
-      return `${h}h ${m}m`;
-    } catch (e) {
-      return "Format: Day 0:00AM/PM";
-    }
-  };
-
-  // Re-calculate whenever nextDate changes
-  useEffect(() => {
-    setTimeUntil(calculateTimeRemaining(nextDate));
-    const timer = setInterval(() => {
-      setTimeUntil(calculateTimeRemaining(nextDate));
-    }, 60000); // Update every minute
-    return () => clearInterval(timer);
-  }, [nextDate]);
-
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(`https://${meetLink}`);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const filteredIdeas =
-    selectedCategory === "All"
-      ? dateIdeas
-      : dateIdeas.filter((idea) => idea.category === selectedCategory);
+  const filteredIdeas = selectedCategory === "All" 
+    ? dateIdeas 
+    : dateIdeas.filter(i => i.category === selectedCategory);
 
   return (
     <PageTransition>
-      <div className="min-h-screen px-6 py-8 max-w-lg mx-auto">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-8"
-        >
-          <h1 className="text-3xl mb-2 bg-gradient-to-r from-[#9b7ea8] to-[#c9a6ba] bg-clip-text text-transparent">
-            Time Together
-          </h1>
-          <p className="text-[#9e8c9f] text-sm">Every moment is a chance to reconnect</p>
-        </motion.div>
+      <div className="min-h-screen px-6 py-8 max-w-lg mx-auto pb-44 relative">
+        
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-medium bg-gradient-to-r from-[#9b7ea8] to-[#c9a6ba] bg-clip-text text-transparent italic">Date Planner</h1>
+          <p className="text-[#9e8c9f] text-sm italic">Making time for us</p>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="mb-6 bg-gradient-to-br from-[#9b7ea8] to-[#c9a6ba] text-white rounded-3xl p-6 shadow-lg shadow-purple-200/30"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Clock className="w-5 h-5" />
-              <span className="text-sm opacity-90">Next planned date</span>
-            </div>
-            <div className="flex gap-2">
-              <motion.button
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setIsEditingTime(!isEditingTime)}
-                className="p-1.5 rounded-md bg-white/10 hover:bg-white/20 transition-all flex items-center justify-center"
-              >
-                {isEditingTime ? <Check className="w-4 h-4" /> : <Edit2 className="w-4 h-4" />}
-              </motion.button>
-              
-              <motion.button
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setDateModeOn(!dateModeOn)}
-                className={`px-3 py-1 rounded-full text-xs transition-all ${
-                  dateModeOn
-                    ? "bg-white/30 backdrop-blur-sm"
-                    : "bg-white/10 hover:bg-white/20"
-                }`}
-              >
-                {dateModeOn ? "💕 Date Mode On" : "Start Date Mode"}
-              </motion.button>
-            </div>
+        {/* Next Date Card */}
+        <div className="mb-8 bg-gradient-to-br from-[#9b7ea8] to-[#c9a6ba] text-white rounded-[2.5rem] p-6 shadow-xl relative overflow-hidden">
+          <div className="flex justify-between items-center mb-4">
+            <span className="bg-white/20 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">Next Date</span>
+            <button onClick={() => setIsEditingTime(!isEditingTime)} className="p-2 hover:bg-white/10 rounded-full"><Edit2 className="w-4 h-4" /></button>
           </div>
-
           {isEditingTime ? (
-            <motion.input
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              type="text"
-              placeholder="Monday 9:00PM"
-              value={nextDate}
-              onChange={(e) => setNextDate(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && setIsEditingTime(false)}
-              className="text-2xl font-semibold mb-1 bg-white/20 border-none rounded-lg px-2 w-full focus:outline-none focus:ring-2 focus:ring-white/50 text-white placeholder:text-white/50"
-              autoFocus
-            />
+            <input value={nextDate} onChange={(e) => setNextDate(e.target.value)} onBlur={() => setIsEditingTime(false)} className="text-3xl font-bold bg-transparent outline-none w-full" autoFocus />
           ) : (
-            <h2 className="text-2xl font-semibold mb-1">{nextDate}</h2>
+            <h2 className="text-3xl font-bold mb-6">{nextDate}</h2>
           )}
-          
-          <p className="text-sm opacity-75 mb-4">in {timeUntil}</p>
-
-          <div className="bg-white/20 backdrop-blur-sm border border-white/30 rounded-2xl p-4 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              <motion.div
-                animate={{ scale: [1, 1.1, 1] }}
-                transition={{ duration: 2, repeat: Infinity }}
-              >
-                <Video className="w-5 h-5 flex-shrink-0" />
-              </motion.div>
-              <span className="text-sm truncate">{meetLink}</span>
-            </div>
-            <motion.button
-              whileHover={{ scale: 1.05, rotate: [0, -5, 5, 0] }}
-              whileTap={{ scale: 0.95 }}
-              onClick={handleCopyLink}
-              className="bg-white/20 hover:bg-white/30 rounded-xl p-2 transition-all relative overflow-hidden"
-            >
-              <motion.div
-                initial={false}
-                animate={{ rotate: copied ? 360 : 0 }}
-                transition={{ duration: 0.3 }}
-              >
+          <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 flex items-center justify-between border border-white/20">
+            <span className="text-xs font-mono truncate mr-4">{meetLink}</span>
+            <div className="flex gap-2">
+              <button onClick={() => { navigator.clipboard.writeText(`https://${meetLink}`); setCopied(true); setTimeout(() => setCopied(false), 2000); }} className="p-2 bg-white/20 rounded-lg">
                 {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              </motion.div>
-            </motion.button>
+              </button>
+            </div>
           </div>
-        </motion.div>
+        </div>
 
-        {/* Category Filter */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="mb-6 flex gap-2 overflow-x-auto pb-2 scrollbar-hide"
-        >
-          {categories.map((category) => (
-            <motion.button
-              key={category}
-              onClick={() => setSelectedCategory(category)}
-              className={`px-4 py-2 rounded-full text-sm whitespace-nowrap transition-all ${
-                selectedCategory === category
-                  ? "bg-gradient-to-r from-[#9b7ea8] to-[#c9a6ba] text-white shadow-lg shadow-purple-200/30"
-                  : "bg-white/60 backdrop-blur-sm border border-white/80 text-[#5a4a5e] hover:bg-white/80"
-              }`}
-            >
-              {category}
-            </motion.button>
+        {/* Categories */}
+        <div className="flex gap-2 overflow-x-auto pb-6 scrollbar-hide">
+          {categories.map(cat => (
+            <button key={cat} onClick={() => setSelectedCategory(cat)} className={`px-6 py-2 rounded-full text-xs transition-all ${selectedCategory === cat ? "bg-[#9b7ea8] text-white shadow-lg" : "bg-white border border-[#e8d5db] text-[#5a4a5e]"}`}>
+              {cat}
+            </button>
           ))}
-        </motion.div>
+        </div>
 
-        {/* Date Ideas Grid */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
-          className="space-y-4"
-        >
+        {/* List */}
+        <div className="space-y-4">
           {filteredIdeas.map((idea, idx) => (
-            <motion.div
-              key={idx}
-              whileHover={{ scale: 1.02, y: -4 }}
-              className="bg-white/60 backdrop-blur-md border border-white/80 rounded-3xl p-6 shadow-lg shadow-purple-100/20 transition-all cursor-pointer relative overflow-hidden group"
+            <motion.div key={idx} layout onClick={() => setSelectedIdea(idea)} className="bg-white/70 backdrop-blur-sm border border-white rounded-[2rem] p-5 shadow-sm cursor-pointer flex items-center gap-4 group">
+              <div className="w-16 h-16 bg-purple-50 rounded-2xl flex items-center justify-center text-3xl">{idea.image}</div>
+              <div className="flex-1">
+                <h3 className="text-[#5a4a5e] font-bold">{idea.title}</h3>
+                <span className="text-[10px] bg-[#9b7ea8]/10 text-[#9b7ea8] px-2 py-0.5 rounded-full uppercase font-bold">{idea.category}</span>
+              </div>
+              <ChevronRight className="w-5 h-5 text-[#e8d5db]" />
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Detail Modal */}
+        <AnimatePresence>
+          {selectedIdea && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-6" onClick={() => setSelectedIdea(null)}>
+              <motion.div initial={{ scale: 0.9, y: 50 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 50 }} className="bg-white w-full max-w-sm rounded-[3rem] p-8 shadow-2xl" onClick={e => e.stopPropagation()}>
+                <div className="text-6xl text-center mb-6">{selectedIdea.image}</div>
+                <h2 className="text-2xl font-bold text-[#5a4a5e] text-center mb-6">{selectedIdea.title}</h2>
+                <p className="text-[#9e8c9f] text-center italic mb-8">"{selectedIdea.description}"</p>
+                
+                <motion.button 
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => { setDatingMode(selectedIdea); setSelectedIdea(null); }}
+                  className="w-full bg-gradient-to-r from-red-400 to-[#9b7ea8] text-white py-5 rounded-3xl font-bold shadow-xl flex items-center justify-center gap-3 group"
+                >
+                  <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 0.8 }}>
+                    <Heart className="w-6 h-6 fill-white" />
+                  </motion.div>
+                  Enter Dating Mode
+                </motion.button>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* LIVE DATING MODE OVERLAY */}
+        <AnimatePresence>
+          {datingMode && (
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[60] bg-gradient-to-b from-[#9b7ea8] to-[#c9a6ba] p-8 flex flex-col items-center justify-center text-white text-center"
             >
-              <div className="flex gap-4 relative z-10">
-                <div className="flex-shrink-0 w-16 h-16 bg-gradient-to-br from-white/80 to-white/40 rounded-2xl flex items-center justify-center text-3xl shadow-sm">
-                  {idea.image}
+              <div className="absolute top-10 right-10">
+                <button onClick={() => setDatingMode(null)} className="p-3 bg-white/20 rounded-full"><X className="w-6 h-6" /></button>
+              </div>
+
+              <motion.div animate={{ y: [0, -20, 0] }} transition={{ duration: 4, repeat: Infinity }} className="text-9xl mb-8 drop-shadow-2xl">
+                {datingMode.image}
+              </motion.div>
+
+              <h2 className="text-4xl font-bold mb-2 italic">Dating Mode</h2>
+              <p className="text-xl opacity-90 mb-10 px-4 italic">"{datingMode.title}"</p>
+              
+              <motion.a
+                href={`https://${meetLink}`}
+                target="_blank"
+                rel="noreferrer"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="mb-12 bg-white text-[#9b7ea8] px-8 py-4 rounded-2xl font-bold shadow-2xl flex items-center gap-3"
+              >
+                <VideoIcon className="w-6 h-6" />
+                Go to Date (GMeet)
+              </motion.a>
+
+              <div className="flex gap-4">
+                <div className="flex flex-col items-center">
+                   <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mb-2">
+                      <Heart className="w-8 h-8 fill-white animate-pulse" />
+                   </div>
+                   <span className="text-xs font-bold uppercase tracking-widest">You</span>
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <h3 className="text-[#5a4a5e] font-medium">{idea.title}</h3>
-                    <div className={`px-3 py-1 rounded-full text-xs text-[#5a4a5e] bg-gradient-to-br ${moodColors[idea.mood as keyof typeof moodColors]}`}>
-                      {idea.mood}
-                    </div>
-                  </div>
-                  <p className="text-sm text-[#9e8c9f] leading-relaxed mb-3">
-                    {idea.description}
-                  </p>
-                  <span className="text-xs text-[#9e8c9f] bg-white/60 px-3 py-1 rounded-full">
-                    {idea.category}
-                  </span>
+                <div className="w-12 border-t-2 border-dashed border-white/40 self-center mt-[-20px]" />
+                <div className="flex flex-col items-center">
+                   <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mb-2">
+                      <Heart className="w-8 h-8 fill-white animate-pulse" />
+                   </div>
+                   <span className="text-xs font-bold uppercase tracking-widest">Partner</span>
                 </div>
               </div>
             </motion.div>
-          ))}
-        </motion.div>
-
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          className="w-full mt-6 bg-white/60 backdrop-blur-md border border-white/80 rounded-2xl py-4 text-[#9b7ea8] hover:bg-white/80 transition-all shadow-lg flex items-center justify-center gap-2 font-medium"
-        >
-          <Heart className="w-5 h-5" />
-          Generate more ideas
-        </motion.button>
+          )}
+        </AnimatePresence>
       </div>
     </PageTransition>
   );
